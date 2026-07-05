@@ -385,10 +385,17 @@
   .tc-btn:hover{ transform:scale(1.06); }
 
   .photo-strip{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .photo-thumb-wrap{ position:relative; width:56px; height:56px; }
   .photo-thumb{
     width:56px; height:56px; border-radius:8px; object-fit:cover; cursor:pointer;
     border:1px solid #d8cbb0;
   }
+  .photo-remove-btn{
+    position:absolute; top:-7px; right:-7px; width:20px; height:20px; border-radius:50%;
+    background:var(--rose); color:#fff; border:2px solid var(--card); font-size:11px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; padding:0;
+  }
+  .photo-remove-btn:hover{ background:var(--rose-light); }
   .add-photo-btn{
     width:56px; height:56px; border-radius:8px; border:1.5px dashed #c9b98e; background:#f4ecd9;
     display:flex; align-items:center; justify-content:center; cursor:pointer; color:#8a6f34; font-size:20px;
@@ -477,6 +484,28 @@
     cursor:pointer; transition:.15s;
   }
   .mood-btn.sel{ background:var(--gold); border-color:var(--gold); transform:scale(1.06); }
+
+  /* Tutor Shared Files */
+  .info-banner{
+    display:flex; align-items:flex-start; gap:12px;
+    background:rgba(201,161,90,.1); border:1px solid var(--line);
+    border-radius:12px; padding:14px 16px; margin-bottom:18px;
+    color:#e6c988; font-size:13px; line-height:1.5;
+  }
+  .info-banner .ic{ font-size:18px; }
+  .file-card{
+    background:var(--panel); border:1px solid var(--line-soft); border-radius:12px;
+    padding:14px 16px; display:flex; align-items:center; gap:14px; margin-bottom:10px;
+  }
+  .file-icon{
+    width:42px; height:42px; border-radius:10px; background:var(--panel-2);
+    display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;
+    overflow:hidden;
+  }
+  .file-icon img{ width:100%; height:100%; object-fit:cover; }
+  .file-meta-name{ font-size:13.5px; font-weight:600; color:#fff; margin:0 0 3px; word-break:break-word; }
+  .file-meta-sub{ font-size:11.5px; color:var(--muted); }
+  .file-actions{ display:flex; gap:6px; margin-left:auto; flex-shrink:0; }
 
   /* Chat */
   .chat-shell{
@@ -594,6 +623,7 @@
     <div class="ribbon" data-tab="homework"><span class="dot" style="background:var(--rose-light)"></span>Homework</div>
     <div class="ribbon" data-tab="attendance"><span class="dot" style="background:var(--teal-light)"></span>Attendance</div>
     <div class="ribbon" data-tab="tests"><span class="dot" style="background:var(--gold-light)"></span>Tests</div>
+    <div class="ribbon" data-tab="files"><span class="dot" style="background:#7fa8c9"></span>Tutor Files</div>
     <div class="ribbon" data-tab="announcements"><span class="dot" style="background:#9db4e0"></span>Announcements</div>
     <div class="ribbon" data-tab="diary"><span class="dot" style="background:var(--gold)"></span>Diary</div>
     <div class="ribbon" data-tab="chat"><span class="dot" style="background:var(--teal-light)"></span>Chat</div>
@@ -960,6 +990,7 @@ async function renderTab(){
   if(activeTab==='homework') return renderHomework();
   if(activeTab==='attendance') return renderAttendance();
   if(activeTab==='tests') return renderTests();
+  if(activeTab==='files') return renderSharedFiles();
   if(activeTab==='announcements') return renderAnnouncements();
   if(activeTab==='diary') return renderDiary();
   if(activeTab==='chat') return renderChat();
@@ -1162,6 +1193,7 @@ function renderHwCard(hw, isTutor, isStudent){
       <div class="marks-area"></div>
     </div>
     <div class="photo-strip" data-role="photos"></div>
+    ${isStudent && (!hw.photos || !hw.photos.length) ? `<p style="font-size:11.5px; color:#9c6b3f; margin:8px 0 0;">📎 Attach a photo of your work to mark this complete</p>` : ''}
   `;
 
   // tick / cross (student only can toggle; others view state via badge, but show icons read-only for context)
@@ -1175,6 +1207,10 @@ function renderHwCard(hw, isTutor, isStudent){
       btn.addEventListener('click', async ()=>{
         const list = await getHomework();
         const target = list.find(h=>h.id===hw.id);
+        if(btn.dataset.set==='completed' && (!target.photos || target.photos.length===0)){
+          showToast('Please attach a photo of your work before marking complete');
+          return;
+        }
         target.status = btn.dataset.set;
         await saveHomework(list);
         showToast(btn.dataset.set==='completed' ? 'Marked as completed' : 'Marked as not done');
@@ -1210,11 +1246,32 @@ function renderHwCard(hw, isTutor, isStudent){
 
   // photos
   const photoStrip = el.querySelector('[data-role="photos"]');
-  (hw.photos||[]).forEach(src=>{
+  (hw.photos||[]).forEach((src, idx)=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'photo-thumb-wrap';
     const img = document.createElement('img');
     img.src = src; img.className='photo-thumb';
     img.addEventListener('click', ()=> openPhotoModal(src));
-    photoStrip.appendChild(img);
+    wrap.appendChild(img);
+    if(isStudent){
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'photo-remove-btn';
+      removeBtn.type = 'button';
+      removeBtn.title = 'Remove photo';
+      removeBtn.textContent = '✕';
+      removeBtn.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        if(!confirm('Remove this photo?')) return;
+        const list = await getHomework();
+        const target = list.find(h=>h.id===hw.id);
+        target.photos.splice(idx, 1);
+        await saveHomework(list);
+        showToast('Photo removed');
+        renderHomework();
+      });
+      wrap.appendChild(removeBtn);
+    }
+    photoStrip.appendChild(wrap);
   });
   if(isStudent){
     const addBtn = document.createElement('label');
@@ -1474,7 +1531,11 @@ function renderTestCard(t, isTutor){
     <div class="progress-track"><div class="progress-fill ${passed?'':'fail'}" style="width:${pctWidth}%"></div></div>
     <div class="test-scoreline"><span>${t.obtained} / ${t.max} marks</span><span>${pctWidth}%</span></div>
     ${t.remarks ? `<div class="remarks-box">💬 ${t.remarks}</div>` : ''}
+    ${t.photo ? `<div class="photo-strip" style="margin-top:12px;"><img src="${t.photo}" class="photo-thumb" data-act="view-photo"></div>` : ''}
   `;
+  if(t.photo){
+    el.querySelector('[data-act="view-photo"]').addEventListener('click', ()=> openPhotoModal(t.photo));
+  }
   if(isTutor){
     el.querySelector('[data-act="edit"]').addEventListener('click', ()=> openTestModal(t));
     el.querySelector('[data-act="del"]').addEventListener('click', async ()=>{
@@ -1502,6 +1563,14 @@ function openTestModal(t=null){
         <div class="field"><label>Passing marks</label><input id="t-passing" type="number" min="0" value="${t?t.passing:50}"></div>
       </div>
       <div class="field"><label>Remarks</label><textarea id="t-remarks" placeholder="Feedback for the student...">${t?t.remarks:''}</textarea></div>
+      <div class="field">
+        <label>Attach a picture (optional)</label>
+        <div id="t-photo-preview" style="margin-bottom:8px;">
+          ${t && t.photo ? `<img src="${t.photo}" class="photo-thumb" style="width:70px;height:70px;">` : ''}
+        </div>
+        <input id="t-photo-input" type="file" accept="image/*">
+        ${t && t.photo ? `<button type="button" class="btn btn-ghost btn-sm" id="t-photo-remove" style="margin-top:8px;">Remove picture</button>` : ''}
+      </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="t-cancel">Cancel</button>
         <button class="btn btn-primary" id="t-save">${t?'Save changes':'Add test'}</button>
@@ -1509,6 +1578,21 @@ function openTestModal(t=null){
     </div>
   `;
   document.body.appendChild(backdrop);
+  let photoValue = t && t.photo ? t.photo : null;
+  backdrop.querySelector('#t-photo-input').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    photoValue = await resizeImage(file, 700, 0.72);
+    backdrop.querySelector('#t-photo-preview').innerHTML = `<img src="${photoValue}" class="photo-thumb" style="width:70px;height:70px;">`;
+  });
+  const removeBtn = backdrop.querySelector('#t-photo-remove');
+  if(removeBtn){
+    removeBtn.addEventListener('click', ()=>{
+      photoValue = null;
+      backdrop.querySelector('#t-photo-preview').innerHTML = '';
+      removeBtn.remove();
+    });
+  }
   backdrop.querySelector('#t-cancel').addEventListener('click', ()=>backdrop.remove());
   backdrop.querySelector('#t-save').addEventListener('click', async ()=>{
     const name = backdrop.querySelector('#t-name').value.trim();
@@ -1521,15 +1605,121 @@ function openTestModal(t=null){
     const list = await getTests();
     if(t){
       const target = list.find(x=>x.id===t.id);
-      Object.assign(target, { name, date, obtained, max, passing, remarks });
+      Object.assign(target, { name, date, obtained, max, passing, remarks, photo:photoValue });
     }else{
-      list.push({ id:uid(), name, date, obtained, max, passing, remarks });
+      list.push({ id:uid(), name, date, obtained, max, passing, remarks, photo:photoValue });
     }
     await saveTests(list);
     backdrop.remove();
     showToast(t?'Test updated':'Test added');
     renderTests();
   });
+}
+
+/* ============================================================
+   TUTOR SHARED FILES
+============================================================ */
+async function getSharedFiles(){ return (await storeGet('sharedFiles', true)) || []; }
+async function saveSharedFiles(list){ await storeSet('sharedFiles', list, true); }
+
+function fileIcon(mime){
+  if(mime.startsWith('image/')) return null;
+  if(mime==='application/pdf') return '📕';
+  if(mime.includes('word')) return '📝';
+  if(mime.includes('sheet') || mime.includes('excel')) return '📊';
+  if(mime.includes('presentation') || mime.includes('powerpoint')) return '📽️';
+  return '📄';
+}
+function fmtBytes(n){
+  if(!n) return '';
+  if(n < 1024) return n+' B';
+  if(n < 1024*1024) return Math.round(n/1024)+' KB';
+  return (n/(1024*1024)).toFixed(1)+' MB';
+}
+
+async function renderSharedFiles(){
+  const list = await getSharedFiles();
+  const isTutor = currentUser.role==='tutor';
+  const main = document.getElementById('main-content');
+  main.innerHTML = `
+    <div class="section-head">
+      <div>
+        <h1>Tutor Shared Files</h1>
+        <p>${isTutor ? 'Upload files for the class to see' : 'Files shared by your tutor'}</p>
+      </div>
+      ${isTutor ? `<label class="btn btn-primary" style="cursor:pointer;">+ Upload File<input id="file-upload-input" type="file" style="display:none;"></label>` : ''}
+    </div>
+    <div class="info-banner">
+      <span class="ic">📌</span>
+      <span>This tab is only for the tutor to share <strong>formulas or class work</strong> — please keep it focused on study material.</span>
+    </div>
+    <div id="files-list"></div>
+  `;
+  const wrap = document.getElementById('files-list');
+  if(!list.length){
+    wrap.innerHTML = `<div class="empty-state"><div class="icon">📁</div>No files shared yet.</div>`;
+  }else{
+    list.slice().reverse().forEach(f=> wrap.appendChild(renderFileCard(f, isTutor)));
+  }
+  if(isTutor){
+    document.getElementById('file-upload-input').addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      showToast('Uploading…');
+      try{
+        const dataUrl = file.type.startsWith('image/')
+          ? await resizeImage(file, 1100, 0.75)
+          : await new Promise((resolve,reject)=>{
+              const reader = new FileReader();
+              reader.onload = ()=> resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+        const current = await getSharedFiles();
+        const currentTotal = current.reduce((s,x)=>s+((x.dataUrl&&x.dataUrl.length)||0),0);
+        if(currentTotal + dataUrl.length > 800000){
+          showToast('Storage limit reached — remove an old file or share a smaller one');
+          e.target.value = '';
+          return;
+        }
+        current.push({ id:uid(), name:file.name, mime:file.type||'application/octet-stream', size:file.size, dataUrl, uploadedAt:Date.now() });
+        await saveSharedFiles(current);
+        showToast('File shared');
+        renderSharedFiles();
+      }catch(err){
+        console.error(err);
+        showToast('Could not upload this file');
+      }
+      e.target.value = '';
+    });
+  }
+}
+
+function renderFileCard(f, isTutor){
+  const el = document.createElement('div');
+  el.className = 'file-card';
+  const icon = fileIcon(f.mime);
+  el.innerHTML = `
+    <div class="file-icon">${icon ? icon : `<img src="${f.dataUrl}">`}</div>
+    <div>
+      <p class="file-meta-name">${f.name}</p>
+      <p class="file-meta-sub">${fmtBytes(f.size)} · ${new Date(f.uploadedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</p>
+    </div>
+    <div class="file-actions">
+      <a href="${f.dataUrl}" download="${f.name}" class="btn btn-ghost btn-sm">Download</a>
+      ${isTutor ? `<button class="btn-icon" data-act="del">🗑</button>` : ''}
+    </div>
+  `;
+  if(isTutor){
+    el.querySelector('[data-act="del"]').addEventListener('click', async ()=>{
+      if(!confirm('Remove this shared file?')) return;
+      const list = (await getSharedFiles()).filter(x=>x.id!==f.id);
+      await saveSharedFiles(list);
+      showToast('File removed');
+      renderSharedFiles();
+    });
+  }
+  return el;
 }
 
 /* ============================================================
