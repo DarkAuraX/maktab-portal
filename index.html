@@ -481,28 +481,70 @@
 
 <div id="toast" class="toast"></div>
 
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc
+} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD4TLbSdQsIPeRGW15-OVqlWybp6_jkcY8",
+  authDomain: "maktab-portal.firebaseapp.com",
+  projectId: "maktab-portal",
+  storageBucket: "maktab-portal.firebasestorage.app",
+  messagingSenderId: "758103322507",
+  appId: "1:758103322507:web:684c2f475895f0740b898e"
+};
+
+const app = initializeApp(firebaseConfig);
+
+window.db = getFirestore(app);
+window.firebaseDoc = doc;
+window.firebaseGetDoc = getDoc;
+window.firebaseSetDoc = setDoc;
+</script>
+
 <script>
 /* ============================================================
    DATA + STORAGE LAYER (with graceful fallback outside Claude)
 ============================================================ */
-const memoryStore = { personal:{}, shared:{} };
 async function storeGet(key, shared=false){
+
+  const path = shared ? "shared" : "personal";
+
   try{
-    if(window.storage){
-      const r = await window.storage.get(key, shared);
-      if(!r) return null;
-      try{ return JSON.parse(r.value); }catch(e){ return r.value; }
-    }
-  }catch(e){ /* key not found or unavailable */ }
-  const bucket = shared ? memoryStore.shared : memoryStore.personal;
-  return bucket[key] !== undefined ? bucket[key] : null;
+    const snap = await window.firebaseGetDoc(
+      window.firebaseDoc(window.db, path, key)
+    );
+
+    if(!snap.exists()) return null;
+
+    return snap.data().value;
+
+  }catch(err){
+    console.error(err);
+    return null;
+  }
 }
+
 async function storeSet(key, value, shared=false){
+
+  const path = shared ? "shared" : "personal";
+
   try{
-    if(window.storage){ await window.storage.set(key, JSON.stringify(value), shared); return; }
-  }catch(e){ /* ignore, fall back to memory */ }
-  const bucket = shared ? memoryStore.shared : memoryStore.personal;
-  bucket[key] = value;
+    await window.firebaseSetDoc(
+      window.firebaseDoc(window.db, path, key),
+      {
+        value: value,
+        updatedAt: Date.now()
+      }
+    );
+  }catch(err){
+    console.error(err);
+  }
 }
 
 const USERS = {
